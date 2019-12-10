@@ -21,7 +21,7 @@ K.tensorflow_backend._get_available_gpus()
 
 # constants for files
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMG_DIR = 'images'
+IMG_DIR = '/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification'
 PV_DIR = 'PV'
 NO_PV_DIR = 'noPV'
 
@@ -414,7 +414,7 @@ if __name__ == '__main__':
             "--skip_test=False",
 
             "--epochs=1000",
-            "--epochs_ckpt=5",
+            "--epochs_ckpt=10",
             "--batch_size=100",
             "--train_set=train_0_7.pickle",
             "--test_set=test_0_7.pickle",

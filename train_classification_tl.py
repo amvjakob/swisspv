@@ -14,7 +14,7 @@ from keras.models import Model, Sequential
 import keras.models as models
 
 from keras.layers import Dense
-from keras.callbacks import Callback, ModelCheckpoint
+from keras.callbacks import Callback, ModelCheckpoint, CSVLogger
 
 # log info
 from keras import backend as K
@@ -40,6 +40,31 @@ TRAIN_TEST_SPLIT = 0.7
 # used for standardization of pictures
 INPUT_MEAN = 127.5
 INPUT_STD = 127.5
+
+
+
+# the following methods are inspired by
+# https://datascience.stackexchange.com/questions/45165/how-to-get-accuracy-f1-precision-and-recall-for-a-keras-model
+
+# evaluate model recall
+def recall_m(y_true, y_pred):
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+        recall = true_positives / (possible_positives + K.epsilon())
+        return recall
+
+# evaluate model recall
+def precision_m(y_true, y_pred):
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+        precision = true_positives / (predicted_positives + K.epsilon())
+        return precision
+
+# evaluate model recall
+def f1_m(y_true, y_pred):
+    precision = precision_m(y_true, y_pred)
+    recall = recall_m(y_true, y_pred)
+    return 2*((precision*recall)/(precision+recall+K.epsilon()))
 
 
 # custom saver class for model
@@ -314,7 +339,7 @@ def fit(model, imgs, labels):
 
     model.compile(optimizer=args.optimizer,
                   loss=args.loss,
-                  metrics=['accuracy'])
+                  metrics=['accuracy', f1_m, precision_m, recall_m])
 
     # transform label list into label matrix
     labels_as_matrix = utils.to_categorical(labels, num_classes=NUM_CLASSES)
@@ -324,7 +349,7 @@ def fit(model, imgs, labels):
 
     # fit model
     model.fit(imgs, labels_as_matrix,
-              callbacks=[ModelCheckpoint("weights.{epoch:02d}-{val_loss:.2f}.hdf5", monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True)],
+              callbacks=[CSVLogger('log.csv'), ModelCheckpoint("weights.{epoch:02d}-{val_loss:.2f}.hdf5", monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True)],
               epochs=args.epochs,
               batch_size=args.batch_size,
               validation_split=args.validation_split,

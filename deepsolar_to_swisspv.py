@@ -27,11 +27,11 @@ if __name__ == '__main__':
     inception = InceptionV3()
 
     # start tensorflow session
-    with tf.compat.v1.Session() as sess:
+    with tf.Session() as sess:
 
         # import graph
-        saver = tf.compat.v1.train.import_meta_graph(PATH_OLD_MODEL_META)
-        init = tf.compat.v1.global_variables_initializer()
+        saver = tf.train.import_meta_graph(PATH_OLD_MODEL_META)
+        init = tf.global_variables_initializer()
         sess.run(init)
 
         # load weights for graph
@@ -42,7 +42,7 @@ if __name__ == '__main__':
             raise Exception("Checkpoint not found")
 
         # get all global variables (including model variables)
-        vars_global = tf.compat.v1.global_variables()
+        vars_global = tf.global_variables()
 
         # get their name and value and put them into dictionary
         sess.as_default()

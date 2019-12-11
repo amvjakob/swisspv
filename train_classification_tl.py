@@ -10,7 +10,7 @@ import skimage.io
 import skimage.transform
 
 from keras import utils
-from keras.models import Model, load_model
+from keras.models import Model, Sequential, load_model
 
 from keras.layers import Dense
 from keras.callbacks import Callback

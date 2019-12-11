@@ -10,10 +10,11 @@ import skimage.io
 import skimage.transform
 
 from keras import utils
-from keras.models import Model, Sequential, load_model
+from keras.models import Model, Sequential
+import keras.models as models
 
 from keras.layers import Dense
-from keras.callbacks import Callback
+from keras.callbacks import Callback, ModelCheckpoint
 
 # log info
 from keras import backend as K
@@ -21,7 +22,7 @@ K.tensorflow_backend._get_available_gpus()
 
 # constants for files
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMG_DIR = 'images'
+IMG_DIR = '/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification'
 PV_DIR = 'PV'
 NO_PV_DIR = 'noPV'
 
@@ -42,7 +43,7 @@ INPUT_STD = 127.5
 
 
 # custom saver class for model
-class SwissPVSaver(Callback):
+class SwissPVSaver():
     @staticmethod
     def build_model_path(epoch):
         model_name = f"keras_swisspv_" \
@@ -54,11 +55,11 @@ class SwissPVSaver(Callback):
 
         return os.path.join(SAVE_DIR, model_name)
 
-    def on_epoch_end(self, epoch, logs=None):
-        if logs is None:
-            logs = {}
-        if epoch % args.epochs_ckpt == 0:  # save on each kth epoch
-            self.model.save(SwissPVSaver.build_model_path(epoch))
+    #def on_epoch_end(self, epoch, logs=None):
+    #    if logs is None:
+    #        logs = {}
+    #    if epoch % args.epochs_ckpt == 0:  # save on each kth epoch
+    #        self.model.save(SwissPVSaver.build_model_path(epoch))
 
 
 
@@ -267,7 +268,7 @@ def load_from_filenames(train, test, shuffle):
 
     for class_, dir in zip(classes, dirs):
         for data, x, y in zip([train, test], [x_train, x_test], [y_train, y_test]):
-            for name in data[str(class_)]:
+            for name in data[str(class_)][::100]:
                 path = os.path.join(dir, name)
                 images = load_image(path)
                 x.extend(images)
@@ -319,11 +320,11 @@ def fit(model, imgs, labels):
     labels_as_matrix = utils.to_categorical(labels, num_classes=NUM_CLASSES)
 
     # build saver
-    saver = SwissPVSaver()
+    # saver = SwissPVSaver()
 
     # fit model
     model.fit(imgs, labels_as_matrix,
-              callbacks=[saver],
+              callbacks=[ModelCheckpoint("weights.{epoch:02d}-{val_loss:.2f}.hdf5", monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True)],
               epochs=args.epochs,
               batch_size=args.batch_size,
               validation_split=args.validation_split,
@@ -354,7 +355,7 @@ def test(model, imgs, labels):
 
 def run():
     # load model
-    model = load_model(os.path.join(LOAD_DIR, args.ckpt_load))
+    model = models.load_model(os.path.join(LOAD_DIR, args.ckpt_load), compile=False)
 
     # transform model if needed
     if args.from_scratch:
@@ -414,7 +415,7 @@ if __name__ == '__main__':
             "--skip_test=False",
 
             "--epochs=1000",
-            "--epochs_ckpt=5",
+            "--epochs_ckpt=10",
             "--batch_size=100",
             "--train_set=train_0_7.pickle",
             "--test_set=test_0_7.pickle",

@@ -293,7 +293,7 @@ def load_from_filenames(train, test, shuffle):
 
     for class_, dir in zip(classes, dirs):
         for data, x, y in zip([train, test], [x_train, x_test], [y_train, y_test]):
-            for name in data[str(class_)][::100]:
+            for name in data[str(class_)]:
                 path = os.path.join(dir, name)
                 images = load_image(path)
                 x.extend(images)

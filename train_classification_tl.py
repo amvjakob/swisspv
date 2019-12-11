@@ -10,7 +10,8 @@ import skimage.io
 import skimage.transform
 
 from keras import utils
-from keras.models import Model, load_model
+from keras.models import Model
+import keras.models as models
 
 from keras.layers import Dense
 from keras.callbacks import Callback
@@ -354,7 +355,7 @@ def test(model, imgs, labels):
 
 def run():
     # load model
-    model = load_model(os.path.join(LOAD_DIR, args.ckpt_load))
+    model = models.load_model(os.path.join(LOAD_DIR, args.ckpt_load))
 
     # transform model if needed
     if args.from_scratch:

@@ -390,7 +390,7 @@ def run():
     # load model
     model = models.load_model(os.path.join(LOAD_DIR, args.ckpt_load), compile=False)
     if args.ckpt_load_weights:
-	model.load_weights(args.ckpt_load_weights)
+        model.load_weights(args.ckpt_load_weights)
 
     # transform model if needed
     if args.from_scratch:

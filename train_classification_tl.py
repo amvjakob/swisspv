@@ -111,6 +111,7 @@ def parse_args():
     parser.add_argument('--from_scratch', type=str2bool, nargs='?',
                         const=True, default=True)
     parser.add_argument('--ckpt_load', type=str, default='keras_swisspv_untrained.h5')
+    parser.add_argument('--ckpt_load_weights', type=str, default=None)
     parser.add_argument('--verbose', type=int, default=1)
     parser.add_argument('--optimizer', type=str, default='rmsprop')
     parser.add_argument('--loss', type=str, default='binary_crossentropy')
@@ -368,8 +369,15 @@ def test(model, imgs, labels):
         labels: test labels
 
     Returns:
-
     """
+
+    try:
+        model = utils.multi_gpu_model(model)
+        print("Using multithreading")
+    except Exception:
+        print("Using multithreading failed")
+        pass
+
     # transform label list into label matrix
     labels_as_matrix = utils.to_categorical(labels, num_classes=NUM_CLASSES)
 
@@ -381,6 +389,8 @@ def test(model, imgs, labels):
 def run():
     # load model
     model = models.load_model(os.path.join(LOAD_DIR, args.ckpt_load), compile=False)
+    if args.ckpt_load_weights:
+	model.load_weights(args.ckpt_load_weights)
 
     # transform model if needed
     if args.from_scratch:
@@ -394,7 +404,7 @@ def run():
         model = fit(model, x_train, y_train)
 
         # build model name and save model
-        model.save(SwissPVSaver.build_model_path(-1))
+        # model.save(SwissPVSaver.build_model_path(-1))
     elif args.verbose:
         print("Skipping training")
 
@@ -431,6 +441,7 @@ if __name__ == '__main__':
         # use some small values to test model
         sys.argv += [
             "--ckpt_load=keras_model_untrained.h5",
+            "--ckpt_load_weights=weights.997-0.67.hdf5",
 
             "--optimizer=rmsprop",
             "--loss=binary_crossentropy",

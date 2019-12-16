@@ -212,7 +212,7 @@ def load_from_filenames(train, test, shuffle):
 
     for class_, dir in zip(classes, dirs):
         for data, x, y in zip([train, test], [x_train, x_test], [y_train, y_test]):
-            for name in data[str(class_)][::100]:
+            for name in data[str(class_)]:
                 path = os.path.join(dir, name)
                 images = load_image(path)
                 x.extend(images)
@@ -298,9 +298,17 @@ def build_model():
         else:
             new_model.load_weights("seg_1_weights.hdf5", by_name=True)
 
-    new_model.compile(optimizer=optimizers.RMSprop(learning_rate=0.005),
-                      loss=losses.SparseCategoricalCrossentropy(),
-                      metrics=[metrics.SparseCategoricalAccuracy()])
+    try:
+        new_model = utils.multi_gpu_model(new_model)
+        print("Using multithreading")
+    except Exception:
+        print("Using multithreading failed")
+        pass
+      
+
+    new_model.compile(optimizer='rmsprop',
+                      loss='sparse_categorical_crossentropy',
+                      metrics=['sparse_categorical_accuracy'])
 
     # save new model
     filename = f'keras_seg_base_{"1" if not args.two_layers else "2"}.h5'
@@ -373,7 +381,7 @@ def test(model, x_test, y_test):
     predictions = np.argmax(yhat, axis=1)
     for i, prediction in enumerate(predictions):
 
-        if True or (prediction == 1 and yhat[prediction] > 0.5):
+        if prediction == 1 and yhat[prediction] > 0.5:
             x = np.reshape(x_test[i], [1, INPUT_WIDTH, INPUT_HEIGHT, 3])
             CAM = test_model.predict(x, batch_size=1)
             CAM = rescale_CAM(CAM)

@@ -15,7 +15,7 @@ from keras import utils
 from keras.models import Model, Sequential
 import keras.models as models
 
-from keras.layers import Dense
+from keras.layers import Dense, Dropout
 from keras.callbacks import Callback, ModelCheckpoint, CSVLogger
 
 # log info
@@ -122,6 +122,8 @@ def parse_args():
                         const=True, default=False)
     parser.add_argument('--skip_test', type=str2bool, nargs='?',
                         const=True, default=False)
+    parser.add_argument('--fine_tuning', type=str2bool, default=False)
+    parser.add_argument('--fine_tune_layers', type=int, default=4)
 
     args = parser.parse_args()
     return args
@@ -285,11 +287,19 @@ def build_model(old_model):
     """
 
     # freeze old layers
-    for layer in old_model.layers:
-        layer.trainable = False
+    if args.fine_tuning:
+        for layer in old_model.layers[:-args.fine_tune_layers]:
+            layer.trainable = False
+    else:
+        for layer in old_model.layers:
+            layer.trainable = False
 
     # get relevant layers from old model
     inception_output = old_model.get_layer(index=-2).output
+
+    if args.fine_tuning:
+        inception_output = Dense(1024, activation='relu')(inception_output)
+        inception_output = Dropout(0.5)(inception_output)
 
     # create new layer
     swisspv_prediction = Dense(NUM_CLASSES, activation='softmax')(inception_output)
@@ -298,7 +308,7 @@ def build_model(old_model):
     new_model = Model(inputs=old_model.input, outputs=swisspv_prediction)
 
     # save new model
-    path = os.path.join(SAVE_DIR, 'keras_model_untrained.h5')
+    path = os.path.join(SAVE_DIR, f"keras_model_untrained_ft_{args.fine_tune_layers}.h5")
     new_model.save(path)
 
     return new_model
@@ -348,14 +358,14 @@ def run():
         y = utils.to_categorical(y_train, num_classes=NUM_CLASSES)
 
         # custom callback
-        metrics = CSVMetrics('log_classification.csv')
+        metrics = CSVMetrics(f"log_classification_ft_{args.fine_tune_layers}.csv")
         metrics.set_data(x_train, y)
 
         # fit model
         parallel_model.fit(x_train, y,
                            callbacks=[
                                metrics,
-                               ModelCheckpoint("weights_classification.hdf5", monitor='val_loss',
+                               ModelCheckpoint(f"weights_classification_ft_{args.fine_tune_layers}.hdf5", monitor='val_loss',
                                                verbose=1, save_best_only=True, save_weights_only=True)
                            ],
                            epochs=args.epochs,
@@ -365,7 +375,7 @@ def run():
                            verbose=args.verbose)
 
         # build model name and save model
-        model.save(os.path.join(SAVE_DIR, 'keras_model_trained.h5'))
+        model.save(os.path.join(SAVE_DIR, f"keras_model_trained_ft_{args.fine_tune_layers}.h5"))
 
     elif args.verbose:
         print("Skipping training")
@@ -409,12 +419,15 @@ if __name__ == '__main__':
             "--skip_train=False",
             "--skip_test=False",
 
-            "--epochs=2000",
+            "--epochs=1000",
             "--epochs_ckpt=5",
             "--batch_size=128",
             "--train_set=train.pickle",
             "--test_set=test.pickle",
             "--validation_split=0.25",
+
+            "--fine_tuning=False",
+            "--fine_tune_layers=4",
 
             "--verbose=1"
         ]

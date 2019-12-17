@@ -96,7 +96,7 @@ class CSVMetrics(CSVLogger):
 def calc_metrics(model, x, y, prefix=""):
     results = {}
 
-    pred = np.asarray(model.predict(x))
+    pred = np.asarray(model.predict(x)[0])
     y_pred = np.argmax(pred, axis=-1)
     y_true = np.argmax(y, axis=-1)
 
@@ -281,7 +281,7 @@ def load_from_filenames(train, test, shuffle):
 
     for class_, dir in zip(classes, dirs):
         for data, x, y in zip([train, test], [x_train, x_test], [y_train, y_test]):
-            for name in data[str(class_)]:
+            for name in data[str(class_)][::30]:
                 path = os.path.join(dir, name)
                 images = load_image(path)
 
@@ -411,9 +411,19 @@ def run():
         parallel_model.load_weights(args.ckpt_load_weights, by_name=True)
 
 
+    losses = {
+        "predictions": build_loss(label_smoothing=LABEL_SMOOTHING),
+        "aux_predictions": build_loss(label_smoothing=LABEL_SMOOTHING)
+    }
+    loss_weights = {
+        "predictions": 1.0,
+        "aux_predictions": 0.4
+    }
+
     # compile model
     parallel_model.compile(optimizer=optimizer,
-                           loss=build_loss(label_smoothing=LABEL_SMOOTHING),
+                           loss=losses,
+                           loss_weights=loss_weights,
                            metrics=['accuracy'])
 
     # load and split data
@@ -429,13 +439,13 @@ def run():
         metrics.set_data(x_train, y)
 
         # fit model
-        parallel_model.fit(x_train, y,
+        parallel_model.fit(x_train, [y, np.copy(y)],
                            callbacks=[
                                metrics,
-                               lr_decay,
-                               ModelCheckpoint(f"weights_classification_{args.fine_tune_layers}.hdf5",
-                                               monitor='val_loss', verbose=1, save_best_only=True,
-                                               save_weights_only=True)
+                               lr_decay
+                               #ModelCheckpoint(f"weights_classification_{args.fine_tune_layers}.hdf5",
+                               #                monitor='val_loss', verbose=1, save_best_only=True,
+                               #                save_weights_only=True)
                            ],
                            epochs=args.epochs,
                            batch_size=args.batch_size,
@@ -457,7 +467,7 @@ def run():
         y = to_categorical(y_test, num_classes=NUM_CLASSES)
 
         # evaluate model
-        score = parallel_model.evaluate(x_test, y,
+        score = parallel_model.evaluate(x_test, [y, np.copy(y)],
                                         batch_size=args.batch_size,
                                         verbose=args.verbose)
 
@@ -478,7 +488,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         # use some small values to test model
         sys.argv += [
-            "--ckpt_load=keras_swisspv_untrained.h5",
+            "--ckpt_load=keras_swisspv_untrained_aux.h5",
             # "--ckpt_load_weights=weights_classification.hdf5",
 
             "--skip_train=False",

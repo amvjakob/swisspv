@@ -19,7 +19,6 @@ from keras import backend as K
 
 # constants for files
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMG_DIR = args.data_dir
 PV_DIR = 'PV'
 NO_PV_DIR = 'noPV'
 
@@ -65,8 +64,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ckpt_load', type=str, default='keras_swisspv_untrained.h5')
-    parser.add_argument('--verbose', , type=str2bool, nargs='?',
-                        const=True, default=False)
+    parser.add_argument('--verbose', , type=int, default=1)
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--epochs_ckpt', type=int, default=50)
     parser.add_argument('--batch_size', type=int, default=100)
@@ -148,8 +146,8 @@ def load_data(shuffle=True):
             print("Loading data from directory and generating pickle files")
 
         # load all filenames
-        neg_dir = os.path.join(IMG_DIR, NO_PV_DIR)
-        pos_dir = os.path.join(IMG_DIR, PV_DIR)
+        neg_dir = os.path.join(args.data_dir, NO_PV_DIR)
+        pos_dir = os.path.join(args.data_dir, PV_DIR)
 
         # positive
         pos_imgs_names = []
@@ -201,11 +199,12 @@ def load_from_filenames(train, test, shuffle):
         x_train: list of images to be used for training
         y_train: list of training labels
         x_test: list of images to be used for testing
+
         y_train: list of testing labels
     """
     classes = [0, 1]
-    neg_dir = os.path.join(IMG_DIR, NO_PV_DIR)
-    pos_dir = os.path.join(IMG_DIR, PV_DIR)
+    neg_dir = os.path.join(args.data_dir, NO_PV_DIR)
+    pos_dir = os.path.join(args.data_dir, PV_DIR)
     dirs = [neg_dir, pos_dir]
 
     x_train, y_train = [], []
@@ -497,17 +496,15 @@ if __name__ == '__main__':
             "--skip_train=False",
             "--skip_test=False",
 
-            "--epochs=4",
+            "--epochs=10",
             "--epochs_ckpt=2",
             "--batch_size=4",
             "--train_set=train_0_7.pickle",
             "--test_set=test_0_7.pickle",
-            "--validation_split=0.25",
-
-            "--data_dir=/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification"
+            "--validation_split=0.1",
 
 
-            "--verbose=True"
+            "--verbose=1"
         ]
 
     args = parse_args()

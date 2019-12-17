@@ -33,7 +33,7 @@ K.tensorflow_backend._get_available_gpus()
 
 # constants for files
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMG_DIR = '/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification'
+IMG_DIR = args.data_dir
 PV_DIR = 'PV'
 NO_PV_DIR = 'noPV'
 
@@ -134,7 +134,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ckpt_load', type=str, default='keras_swisspv_untrained.h5')
     parser.add_argument('--ckpt_load_weights', type=str, default=None)
-    parser.add_argument('--verbose', type=int, default=1)
+    parser.add_argument('--verbose', type=str2bool, , nargs='?',
+                        const=True, default=False)
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--epochs_ckpt', type=int, default=50)
     parser.add_argument('--batch_size', type=int, default=100)
@@ -146,6 +147,7 @@ def parse_args():
     parser.add_argument('--skip_test', type=str2bool, nargs='?',
                         const=True, default=False)
     parser.add_argument('--fine_tune_layers', type=int, default=0)
+    parser.add_argument('--data_dir', type=str, default='/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification')
 
     args = parser.parse_args()
     return args
@@ -444,7 +446,7 @@ def run():
                            verbose=args.verbose)
 
         # build model name and save model
-        #model.save(os.path.join(SAVE_DIR, f"keras_model_trained_{args.fine_tune_layers}.h5"))
+        # model.save(os.path.join(SAVE_DIR, f"keras_model_trained_{args.fine_tune_layers}.h5"))
 
     elif args.verbose:
         print("Skipping training")
@@ -493,7 +495,9 @@ if __name__ == '__main__':
             "--test_set=test.pickle",
             "--validation_split=0.1",
 
-            "--verbose=1"
+            "--data_dir=/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification"
+
+            "--verbose=True"
         ]
 
     args = parse_args()

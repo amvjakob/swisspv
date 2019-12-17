@@ -33,7 +33,6 @@ K.tensorflow_backend._get_available_gpus()
 
 # constants for files
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMG_DIR = '/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification'
 PV_DIR = 'PV'
 NO_PV_DIR = 'noPV'
 
@@ -52,7 +51,7 @@ TRAIN_TEST_SPLIT = 0.9
 LR_INITIAL = 0.001
 EPOCHS_PER_DECAY = 5
 LR_DECAY = 0.5
-RMSPROP_DECAY = 0.9  # Decay term for RMSProp.
+RMSPROP_DECAY = 0.8  # Decay term for RMSProp.
 RMSPROP_MOMENTUM = 0.9  # Momentum in RMSProp.
 RMSPROP_EPSILON = 0.1  # Epsilon term for RMSProp.
 
@@ -146,6 +145,7 @@ def parse_args():
     parser.add_argument('--skip_test', type=str2bool, nargs='?',
                         const=True, default=False)
     parser.add_argument('--fine_tune_layers', type=int, default=0)
+    parser.add_argument('--data_dir', type=str, default='/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification')
 
     args = parser.parse_args()
     return args
@@ -211,8 +211,8 @@ def load_data(shuffle=True):
             print("Loading data from directory and generating pickle files")
 
         # load all filenames
-        neg_dir = os.path.join(IMG_DIR, NO_PV_DIR)
-        pos_dir = os.path.join(IMG_DIR, PV_DIR)
+        neg_dir = os.path.join(args.data_dir, NO_PV_DIR)
+        pos_dir = os.path.join(args.data_dir, PV_DIR)
 
         # positive
         pos_imgs_names = []
@@ -267,8 +267,8 @@ def load_from_filenames(train, test, shuffle):
         y_train: list of testing labels
     """
     classes = [0, 1]
-    neg_dir = os.path.join(IMG_DIR, NO_PV_DIR)
-    pos_dir = os.path.join(IMG_DIR, PV_DIR)
+    neg_dir = os.path.join(args.data_dir, NO_PV_DIR)
+    pos_dir = os.path.join(args.data_dir, PV_DIR)
     dirs = [neg_dir, pos_dir]
 
     x_train, y_train = [], []
@@ -444,7 +444,7 @@ def run():
                            verbose=args.verbose)
 
         # build model name and save model
-        #model.save(os.path.join(SAVE_DIR, f"keras_model_trained_{args.fine_tune_layers}.h5"))
+        model.save(os.path.join(SAVE_DIR, f"keras_model_trained_{args.fine_tune_layers}.h5"))
 
     elif args.verbose:
         print("Skipping training")

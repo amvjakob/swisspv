@@ -19,8 +19,7 @@ from keras import backend as K
 
 # constants for files
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMG_DIR = '/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification/'
-#IMG_DIR = 'images'
+IMG_DIR = args.data_dir
 PV_DIR = 'PV'
 NO_PV_DIR = 'noPV'
 
@@ -66,7 +65,8 @@ def parse_args():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ckpt_load', type=str, default='keras_swisspv_untrained.h5')
-    parser.add_argument('--verbose', type=int, default=1)
+    parser.add_argument('--verbose', , type=str2bool, nargs='?',
+                        const=True, default=False)
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--epochs_ckpt', type=int, default=50)
     parser.add_argument('--batch_size', type=int, default=100)
@@ -84,6 +84,7 @@ def parse_args():
 
     parser.add_argument('--seg_1_weights', type=str, default='seg_1_weights.hdf5')
     parser.add_argument('--seg_2_weights', type=str, default='seg_2_weights.hdf5')
+    parser.add_argument('--data_dir', type=str, default='/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification')
 
     args = parser.parse_args()
     return args
@@ -503,7 +504,10 @@ if __name__ == '__main__':
             "--test_set=test_0_7.pickle",
             "--validation_split=0.25",
 
-            "--verbose=1"
+            "--data_dir=/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification"
+
+
+            "--verbose=True"
         ]
 
     args = parse_args()

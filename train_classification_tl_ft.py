@@ -24,7 +24,7 @@ K.tensorflow_backend._get_available_gpus()
 
 # constants for files
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMG_DIR = '/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification'
+IMG_DIR = args.data_dir
 PV_DIR = 'PV'
 NO_PV_DIR = 'noPV'
 
@@ -124,6 +124,7 @@ def parse_args():
                         const=True, default=False)
     parser.add_argument('--fine_tuning', type=str2bool, default=False)
     parser.add_argument('--fine_tune_layers', type=int, default=4)
+    parser.add_argument('--data_dir', type=str, default='/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification')
 
     args = parser.parse_args()
     return args
@@ -429,6 +430,8 @@ if __name__ == '__main__':
             "--fine_tuning=False",
             "--fine_tune_layers=4",
 
+            "--data_dir=/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification"
+            
             "--verbose=1"
         ]
 

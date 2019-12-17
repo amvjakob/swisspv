@@ -443,9 +443,9 @@ def run():
                            callbacks=[
                                metrics,
                                lr_decay
-                               #ModelCheckpoint(f"weights_classification_{args.fine_tune_layers}.hdf5",
-                               #                monitor='val_loss', verbose=1, save_best_only=True,
-                               #                save_weights_only=True)
+                               ModelCheckpoint(f"weights_classification_{args.fine_tune_layers}.hdf5",
+                                               monitor='val_loss', verbose=1, save_best_only=True,
+                                               save_weights_only=True)
                            ],
                            epochs=args.epochs,
                            batch_size=args.batch_size,
@@ -454,7 +454,7 @@ def run():
                            verbose=args.verbose)
 
         # build model name and save model
-        #model.save(os.path.join(SAVE_DIR, f"keras_model_trained_{args.fine_tune_layers}.h5"))
+        model.save(os.path.join(SAVE_DIR, f"keras_model_trained_{args.fine_tune_layers}.h5"))
 
     elif args.verbose:
         print("Skipping training")

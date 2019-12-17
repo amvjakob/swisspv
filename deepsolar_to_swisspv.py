@@ -5,6 +5,13 @@ import numpy as np
 import tensorflow as tf
 
 from keras.applications import InceptionV3
+from keras.layers.advanced_activations import Softmax
+from keras.layers import Dense, Flatten, Dropout
+from keras.layers.convolutional import AveragePooling2D, Conv2D
+from keras import initializers
+from keras.models import Model
+
+from keras import backend as K
 
 # constants for model loading
 PATH_OLD_MODEL_DIR = os.path.join('ckpt', 'inception_classification')
@@ -13,6 +20,8 @@ PATH_OLD_MODEL_WEIGHTS = os.path.join(PATH_OLD_MODEL_DIR, 'checkpoint')
 
 PATH_NEW_MODEL_DIR = os.path.join('ckpt', 'inception_tl')
 PATH_NEW_MODEL = os.path.join(PATH_NEW_MODEL_DIR, 'keras_swisspv_untrained.h5')
+
+NUM_CLASSES = 2
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -24,7 +33,40 @@ if __name__ == '__main__':
     args = parse_args()
 
     # init new inception3 model
-    inception = InceptionV3()
+    inception = InceptionV3(include_top=False,
+                            input_shape=(299, 299, 3),
+                            weights=None,
+                            pooling=None)
+    output = inception.layers[-1].output
+
+    net = AveragePooling2D(pool_size=(8, 8), # K.int_shape(output),
+                                  strides=(2, 2),
+                                  padding='valid',
+                                  data_format='channels_last',
+                                  name='pool')(output)
+    net = Dropout(rate=0.2,
+                         name='dropout')(net)
+    net = Flatten(data_format='channels_last',
+                         name='flatten')(net)
+
+    logits = Dense(NUM_CLASSES, activation=None, name="logits")(net)
+    predictions = Softmax(name='predictions')(logits)
+
+    # aux net
+    output = inception.get_layer(name="mixed7").output
+    aux_logits = AveragePooling2D(pool_size=(5, 5),
+                                  strides=(3, 3),
+                                  padding='valid')(output)
+    aux_logits = Conv2D(128, (1, 1), name='proj')(aux_logits)
+    aux_logits = Conv2D(768, K.int_shape(aux_logits)[1:3],
+                        kernel_initializer=initializers.TruncatedNormal(stddev=0.001),
+                        padding='valid')(aux_logits)
+    aux_logits = Flatten(data_format='channels_last')(aux_logits)
+    aux_logits = Dense(NUM_CLASSES, activation=None, name='aux_logits',
+                       kernel_initializer=initializers.TruncatedNormal(stddev=0.001))(aux_logits)
+    aux_predictions = Softmax(name='aux_predictions')(aux_logits)
+
+    model = Model(inputs=inception.input, outputs=[predictions, aux_predictions])
 
     # start tensorflow session
     with tf.Session() as sess:
@@ -47,12 +89,15 @@ if __name__ == '__main__':
         # get their name and value and put them into dictionary
         sess.as_default()
         model_vars = {}
+        n_vars = 0
         for i, var in enumerate(vars_global):
             if args.verbose > 1:
                 print(f"[{i+1}/{len(vars_global)}]")
+
             try:
-                model_vars[var.name] = var.eval()
-                #print(var.name)
+                val = var.eval()
+                model_vars[var.name] = val
+                n_vars += val.size
 
             except Exception as e:
                 print("For var={}, an exception occurred".format(var.name))
@@ -63,6 +108,7 @@ if __name__ == '__main__':
 
         if args.verbose:
             print("Loaded all layers.")
+            print(f"There are a total of {n_vars} weights")
             print("Transforming all layers.")
 
         # transform layer names
@@ -72,21 +118,35 @@ if __name__ == '__main__':
         names = []
         name = None
         value = []
+        batch_norms = []
         for layer in model_vars:
             prefix = layer.split('/')[0]
             if name is None:
                 name = prefix
 
             if prefix == name:
-                value.append(model_vars[layer])
+                if prefix.startswith('batch_normalization'):
+                    # only append the first three variables with this name:
+                    # mean, moving_average, moving_variance
+                    if len(value) < 3:
+                        value.append(model_vars[layer])
+                    else:
+                        print(f"Trying to add more than 3 params to batch_norm layer by trying {layer}")
+                else:
+                    value.append(model_vars[layer])
             else:
-                input_vars[name] = np.array(value)
-                names.append(name)
+                if name not in names:
+                    input_vars[name] = np.array(value)
+                    names.append(name)
+                else:
+                    print(f"Tried to overwrite layer {name}")
+
                 name = prefix
                 value = [model_vars[layer]]
         # last layer
-        input_vars[name] = np.array(value)
-        names.append(name)
+        if name not in names:
+            input_vars[name] = np.array(value)
+            names.append(name)
 
         if args.verbose:
             print("Transformed all layers.")
@@ -110,16 +170,19 @@ if __name__ == '__main__':
         # apply loaded weights to new model
         # check whether the weights within the same layer are in the same order?
         matched_layers = []
-        for i, keras_layer in enumerate(inception.layers):
-            if args.verbose and i < len(names):
-                print(f"Trying to match layer {i}, {keras_layer.name} with {names[i]}")
+        n_matched = 0
+        for i, keras_layer in enumerate(model.layers):
             if keras_layer.name in input_vars:
+                if args.verbose:
+                    print(f"Trying to match layer {i}, {keras_layer.name}")
+
                 tf_layer = input_vars[keras_layer.name]
                 keras_shape = np.array(keras_layer.get_weights()).shape
                 # shape must match
                 if tf_layer.shape == keras_shape:
                     keras_layer.set_weights(tf_layer)
                     matched_layers.append(keras_layer.name)
+                    n_matched += np.array(keras_layer.get_weights()).size
                 else:
                     if args.verbose > 1:
                         print(f"Shape mismatch in layer {keras_layer.name} with shapes "
@@ -128,7 +191,9 @@ if __name__ == '__main__':
                 print(f"Skipping layer {keras_layer.name} with shape "
                       f"{np.array(keras_layer.get_weights()).shape}")
 
-        if args.verbose: print("Transformed layers")
+        if args.verbose:
+            print("Transformed layers")
+            print(f"Applied {n_matched}/{n_vars} weights")
         if args.verbose > 1:
             unmatched_layers = []
             for layer in input_vars:
@@ -139,5 +204,6 @@ if __name__ == '__main__':
             print(f"Unmatched layers from TF model: {len(unmatched_layers)}")
 
         # save new model
-        inception.save(PATH_NEW_MODEL)
-        if args.verbose: print("Saved model")
+        model.save(PATH_NEW_MODEL)
+        if args.verbose:
+            print("Saved model")

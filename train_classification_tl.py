@@ -3,20 +3,29 @@ import os.path
 import argparse
 import pickle
 
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 import numpy as np
 
 import skimage
 import skimage.io
 import skimage.transform
 
-from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
+from sklearn.metrics import f1_score, precision_score, recall_score
 
-from keras import utils
-from keras.models import Model, Sequential
-import keras.models as models
+from keras.layers.core import Dense
+from keras.layers.convolutional import Conv2D
+from keras.layers.normalization import BatchNormalization
 
-from keras.layers import Dense
-from keras.callbacks import Callback, ModelCheckpoint, CSVLogger
+from keras.utils import to_categorical, multi_gpu_model
+from keras.regularizers import l2
+
+from keras.optimizers import Adam
+from keras.losses import categorical_crossentropy
+
+from keras.models import load_model
+from keras.callbacks import ModelCheckpoint, CSVLogger, LearningRateScheduler
 
 # log info
 from keras import backend as K
@@ -37,13 +46,30 @@ INPUT_HEIGHT = 299
 
 # constants for model
 NUM_CLASSES = 2
-TRAIN_TEST_SPLIT = 0.7
+TRAIN_TEST_SPLIT = 0.9
 
-# used for standardization of pictures
-INPUT_MEAN = 127.5
-INPUT_STD = 127.5
+# Constants dictating the learning rate schedule.
+LR_INITIAL = 0.001
+EPOCHS_PER_DECAY = 5
+LR_DECAY = 0.5
+RMSPROP_DECAY = 0.9  # Decay term for RMSProp.
+RMSPROP_MOMENTUM = 0.9  # Momentum in RMSProp.
+RMSPROP_EPSILON = 0.1  # Epsilon term for RMSProp.
 
-# https://medium.com/@thongonary/how-to-compute-f1-score-for-each-epoch-in-keras-a1acd17715a2
+# Batch normalization. Constant governing the exponential moving average of
+# the 'global' mean and variance for all activations.
+BATCHNORM_MOVING_AVERAGE_DECAY = 0.9998
+BATCHNORM_EPSILON = 0.001
+LAYER_REG = 0.00004
+
+# imbalanced rate = alpha + 1 (loss penalty on minority class)
+ALPHA = 3
+
+# label smoothing
+LABEL_SMOOTHING = 0.1
+
+
+# Helper class for logging of custom metrics
 class CSVMetrics(CSVLogger):
     def set_data(self, x_train, y_train):
         self.x_train = x_train
@@ -70,7 +96,8 @@ class CSVMetrics(CSVLogger):
 def calc_metrics(model, x, y, prefix=""):
     results = {}
 
-    y_pred = np.argmax(np.asarray(model.predict(x)), axis=-1)
+    pred = np.asarray(model.predict(x))
+    y_pred = np.argmax(pred, axis=-1)
     y_true = np.argmax(y, axis=-1)
 
     results[prefix + "_precision"] = precision_score(y_true, y_pred)
@@ -105,13 +132,9 @@ def parse_args():
             raise argparse.ArgumentTypeError('Boolean value expected.')
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--from_scratch', type=str2bool, nargs='?',
-                        const=True, default=True)
     parser.add_argument('--ckpt_load', type=str, default='keras_swisspv_untrained.h5')
     parser.add_argument('--ckpt_load_weights', type=str, default=None)
     parser.add_argument('--verbose', type=int, default=1)
-    parser.add_argument('--optimizer', type=str, default='rmsprop')
-    parser.add_argument('--loss', type=str, default='binary_crossentropy')
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--epochs_ckpt', type=int, default=50)
     parser.add_argument('--batch_size', type=int, default=100)
@@ -122,6 +145,7 @@ def parse_args():
                         const=True, default=False)
     parser.add_argument('--skip_test', type=str2bool, nargs='?',
                         const=True, default=False)
+    parser.add_argument('--fine_tune_layers', type=int, default=0)
 
     args = parser.parse_args()
     return args
@@ -250,19 +274,41 @@ def load_from_filenames(train, test, shuffle):
     x_train, y_train = [], []
     x_test, y_test = [], []
 
+    DEBUG = False
+    if DEBUG:
+        classes = reversed(classes)
+        dirs = reversed(dirs)
+
     for class_, dir in zip(classes, dirs):
         for data, x, y in zip([train, test], [x_train, x_test], [y_train, y_test]):
             for name in data[str(class_)]:
                 path = os.path.join(dir, name)
                 images = load_image(path)
+
                 x.extend(images)
                 y.extend(np.repeat([class_], len(images)))
 
+                if DEBUG: break
+            # if DEBUG: break
+        if DEBUG: break
+
     # transform to numpy array
-    x_train = np.asarray(x_train).reshape((len(x_train), INPUT_WIDTH, INPUT_HEIGHT, 3))
+    x_train = np.asarray(x_train)
     y_train = np.asarray(y_train)
-    x_test = np.asarray(x_test).reshape((len(x_test), INPUT_WIDTH, INPUT_HEIGHT, 3))
+    x_test = np.asarray(x_test)
     y_test = np.asarray(y_test)
+
+    # normalize images
+    np.subtract(x_train, 0.5)
+    np.multiply(x_train, 2)
+    np.subtract(x_test, 0.5)
+    np.multiply(x_test, 2)
+
+    # reshape
+    x_train = x_train.reshape((len(x_train), INPUT_WIDTH, INPUT_HEIGHT, 3))
+    x_test = x_test.reshape((len(x_test), INPUT_WIDTH, INPUT_HEIGHT, 3))
+
+
 
     # shuffle data
     if shuffle:
@@ -273,48 +319,78 @@ def load_from_filenames(train, test, shuffle):
         return x_train, y_train, x_test, y_test
 
 
-def build_model(old_model):
-    """
-        Builds the new model by replacing the last layer of old_model with
-         a new trainable binary layer (softmax activation)
-    Args:
-        old_model: old inception model
-
-    Returns:
-        New model with trainable last layer
-    """
-
-    # freeze old layers
-    for layer in old_model.layers:
-        layer.trainable = False
-
-    # get relevant layers from old model
-    inception_output = old_model.get_layer(index=-2).output
-
-    # create new layer
-    swisspv_prediction = Dense(NUM_CLASSES, activation='softmax')(inception_output)
-
-    # build new model
-    new_model = Model(inputs=old_model.input, outputs=swisspv_prediction)
-
-    # save new model
-    path = os.path.join(SAVE_DIR, 'keras_model_untrained.h5')
-    new_model.save(path)
-
-    return new_model
-
-
 def run():
     # load model
-    model = models.load_model(os.path.join(LOAD_DIR, args.ckpt_load), compile=False)
+    model = load_model(os.path.join(LOAD_DIR, args.ckpt_load), compile=False)
 
-    # transform model if needed
-    if args.from_scratch:
-        model = build_model(model)
+    # modify model
+    for layer in model.layers:
+        if isinstance(layer, Conv2D) or isinstance(layer, Dense):
+            layer.kernel_regularizer = l2(LAYER_REG)
+
+        if isinstance(layer, BatchNormalization):
+            layer.momentum = BATCHNORM_MOVING_AVERAGE_DECAY
+            layer.epsilon = BATCHNORM_EPSILON
+
+    # define exponential decay for learning rate
+    def lr_decay_callback(decay_rate, decay_steps, use_staircase=True):
+        decay_rate_smooth = np.power(decay_rate, 1.0/decay_steps)
+        def step_decay(epoch, lr):
+            if use_staircase:
+                if epoch % decay_steps == 0:
+                    return lr * decay_rate
+                return lr
+            else:
+                return lr * decay_rate_smooth
+
+        return LearningRateScheduler(step_decay)
+
+    lr_decay = lr_decay_callback(LR_DECAY, EPOCHS_PER_DECAY)
+    # find a way to use momentum param?
+    optimizer = Adam(lr=LR_INITIAL,
+                                decay=RMSPROP_DECAY,
+                                epsilon=RMSPROP_EPSILON)
+
+
+    # categorical crossentropy as loss function
+    def build_loss(label_smoothing=0.0):
+
+        def loss_fn(y_true, y_pred):
+
+            labels = K.cast(np.argmax(y_true, axis=-1), dtype='int64')
+            penalty_vector = np.add(np.multiply(K.cast(ALPHA, dtype='int64'), labels), 1)
+            penalty_vector = K.cast(penalty_vector, dtype='float32')
+
+            # label smoothing
+            if label_smoothing > 0.0:
+                smooth_positives = 1.0 - label_smoothing
+                smooth_negatives = label_smoothing / NUM_CLASSES
+                smooth_labels = y_true * smooth_positives + smooth_negatives
+            else:
+                smooth_labels = y_true
+
+            loss = categorical_crossentropy(smooth_labels, y_pred)
+
+            cost_sensitive_cross_entropy = np.multiply(penalty_vector, loss)
+            return K.mean(cost_sensitive_cross_entropy)
+
+        return loss_fn
+
+    """
+    # freeze layers
+    if not args.skip_train:
+        if args.fine_tune_layers:
+            for layer in model.layers[:-args.fine_tune_layers]:
+                layer.trainable = False
+        else:
+            for layer in model.layers[:-2]:
+                # last two layers are Dense and Softmax
+                layer.trainable = False
+    """
 
     # transform model to use multiple GPUs
     try:
-        parallel_model = utils.multi_gpu_model(model)
+        parallel_model = multi_gpu_model(model)
         if args.verbose:
             print("Using multithreading")
     except Exception:
@@ -334,9 +410,10 @@ def run():
         print("Loading weights")
         parallel_model.load_weights(args.ckpt_load_weights, by_name=True)
 
+
     # compile model
-    parallel_model.compile(optimizer=args.optimizer,
-                           loss=args.loss,
+    parallel_model.compile(optimizer=optimizer,
+                           loss=build_loss(label_smoothing=LABEL_SMOOTHING),
                            metrics=['accuracy'])
 
     # load and split data
@@ -345,18 +422,20 @@ def run():
     # fit model
     if not args.skip_train:
         # build label matrix
-        y = utils.to_categorical(y_train, num_classes=NUM_CLASSES)
+        y = to_categorical(y_train, num_classes=NUM_CLASSES)
 
         # custom callback
-        metrics = CSVMetrics('log_classification.csv')
+        metrics = CSVMetrics(f"log_classification_{args.fine_tune_layers}.csv")
         metrics.set_data(x_train, y)
 
         # fit model
         parallel_model.fit(x_train, y,
                            callbacks=[
                                metrics,
-                               ModelCheckpoint("weights_classification.hdf5", monitor='val_loss',
-                                               verbose=1, save_best_only=True, save_weights_only=True)
+                               lr_decay,
+                               ModelCheckpoint(f"weights_classification_{args.fine_tune_layers}.hdf5",
+                                               monitor='val_loss', verbose=1, save_best_only=True,
+                                               save_weights_only=True)
                            ],
                            epochs=args.epochs,
                            batch_size=args.batch_size,
@@ -365,7 +444,7 @@ def run():
                            verbose=args.verbose)
 
         # build model name and save model
-        model.save(os.path.join(SAVE_DIR, 'keras_model_trained.h5'))
+        #model.save(os.path.join(SAVE_DIR, f"keras_model_trained_{args.fine_tune_layers}.h5"))
 
     elif args.verbose:
         print("Skipping training")
@@ -375,7 +454,7 @@ def run():
         print(f"Test on {len(y_test)} samples")
 
         # transform label list into label matrix
-        y = utils.to_categorical(y_test, num_classes=NUM_CLASSES)
+        y = to_categorical(y_test, num_classes=NUM_CLASSES)
 
         # evaluate model
         score = parallel_model.evaluate(x_test, y,
@@ -402,19 +481,17 @@ if __name__ == '__main__':
             "--ckpt_load=keras_swisspv_untrained.h5",
             # "--ckpt_load_weights=weights_classification.hdf5",
 
-            "--optimizer=rmsprop",
-            "--loss=binary_crossentropy",
-
-            "--from_scratch=True",
             "--skip_train=False",
             "--skip_test=False",
 
-            "--epochs=2000",
+            "--fine_tune_layers=2",
+
+            "--epochs=10",
             "--epochs_ckpt=5",
-            "--batch_size=128",
+            "--batch_size=100",
             "--train_set=train.pickle",
             "--test_set=test.pickle",
-            "--validation_split=0.25",
+            "--validation_split=0.1",
 
             "--verbose=1"
         ]

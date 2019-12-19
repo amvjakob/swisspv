@@ -314,7 +314,7 @@ def build_model():
     path = os.path.join(LOAD_DIR, filename) # save in load dir
     new_model.save(path)
 
-    return parallel_model
+    return new_model, parallel_model
 
 
 def fit(model, imgs, labels):

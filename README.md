@@ -11,17 +11,28 @@ pip install -r requirements.txt
 Note: if your machine is unable to find Tensorflow 1.9.0, the code should run on any version of Tensorflow between 1.15.0 and 1.9.0.
 
 ## Running the program
-### Preprocessing
-We start off by downloading DeepSolar's model and creating the folders that will contain the models To do this, run
-``` 
+### Final model
+
+To start off, one needs to create the folders that will contain the models. To do this, run
+
+```
 mkdir ckpt
 cd ckpt
-curl -O https://s3-us-west-1.amazonaws.com/roofsolar/inception_classification.tar.gz
-tar xzf inception_classification.tar.gz
 
 mkdir deepsolar_classification
 mkdir inception_tl_load
 mkdir inception_tl_save
+```
+
+The final model can be downloaded [here](https://drive.google.com/drive/folders/1HpJn3-KUF0-MBD14KVLR7Xgo45swHH4E?usp=sharing),
+and placed into `inception_tl_load`.
+
+### Preprocessing
+Alternatively, one can start off from scratch by downloading DeepSolar's model and creating the folders that will
+contain the models. To do this, while in `ckpt`, run
+``` 
+curl -O https://s3-us-west-1.amazonaws.com/roofsolar/inception_classification.tar.gz
+tar xzf inception_classification.tar.gz
 ```
 
 We then have to transform DeepSolar's model from TensorFlow to Keras. To perform this task, return to the base directory and run

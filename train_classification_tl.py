@@ -1,4 +1,3 @@
-import sys
 import os.path
 import argparse
 import pickle
@@ -36,6 +35,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PV_DIR = 'PV'
 NO_PV_DIR = 'noPV'
 
+# constants for model saving and loading
 LOAD_DIR = os.path.join(BASE_DIR, 'ckpt', 'inception_tl_load')
 SAVE_DIR = os.path.join(BASE_DIR, 'ckpt', 'inception_tl_save')
 
@@ -47,18 +47,19 @@ INPUT_HEIGHT = 299
 NUM_CLASSES = 2
 TRAIN_TEST_SPLIT = 0.9
 
-# Constants dictating the learning rate schedule.
-LR_INITIAL = 0.001
+# constants for the learning rate schedule
+LR_INITIAL = 0.001 # inital learning rate
 EPOCHS_PER_DECAY = 5
-LR_DECAY = 0.5
-RMSPROP_DECAY = 0.8  # Decay term for RMSProp.
-RMSPROP_MOMENTUM = 0.9  # Momentum in RMSProp.
-RMSPROP_EPSILON = 0.1  # Epsilon term for RMSProp.
+LR_DECAY = 0.8 # learning rate decay
+OPT_DECAY = 0.9  # optimizer decay term
+OPT_EPSILON = 0.1  # optimizer epsilon term
 
-# Batch normalization. Constant governing the exponential moving average of
-# the 'global' mean and variance for all activations.
+# batch normalization: constant governing the exponential moving average of
+# the global mean and variance for all activations.
 BATCHNORM_MOVING_AVERAGE_DECAY = 0.9998
 BATCHNORM_EPSILON = 0.001
+
+# regularization strengths for Conv2D and Dense layers
 LAYER_REG = 0.00004
 
 # imbalanced rate = alpha + 1 (loss penalty on minority class)
@@ -93,6 +94,19 @@ class CSVMetrics(CSVLogger):
             super().on_epoch_end(epoch, logs)
 
 def calc_metrics(model, x, y, prefix=""):
+    """
+    Calculates the following metrics for a given model and dataset:
+    precision, recall, f1, true/false positives, true/false negatives
+
+    Args:
+        model: model to evaluate
+        x: images to classify
+        y: true labels
+        prefix: string to prefix result labels with
+
+    Returns:
+        a dictionary containing all scores, prefixed by `prefix`
+    """
     results = {}
 
     pred = np.asarray(model.predict(x))
@@ -113,7 +127,7 @@ def calc_metrics(model, x, y, prefix=""):
 
 def parse_args():
     """
-        Parses the args given by the user
+    Parses the args given by the user
     Returns:
         The parsed args
     """
@@ -144,7 +158,7 @@ def parse_args():
                         const=True, default=False)
     parser.add_argument('--skip_test', type=str2bool, nargs='?',
                         const=True, default=False)
-    parser.add_argument('--fine_tune_layers', type=int, default=0)
+    parser.add_argument('--fine_tune_layers', type=int, default=2)
     parser.add_argument('--data_dir', type=str, default='/work/hyenergy/raw/SwissTopo/RGB_25cm/data_resized/crop_tool/classification')
 
     args = parser.parse_args()
@@ -153,7 +167,10 @@ def parse_args():
 
 def load_image(path):
     """
-        Loads and transforms an image
+        Loads and transforms an image as float32.
+        Resize image to dimensions INPUT_WIDTH x INPUT_HEIGHT.
+        Rotate image by 0, 90, 180 and 270 degrees.
+
     Args:
         path: path to the image
 
@@ -170,15 +187,16 @@ def load_image(path):
 
     # extend data set by transforming data
     rotate_angles = [0, 90, 180, 270]
-    # rotate_angles = [0, 180]
     images = [skimage.transform.rotate(resized_image, angle) for angle in rotate_angles]
 
-    # normalize pictures?
     return images
 
 def load_data(shuffle=True):
     """
-        Load all images and labels
+    Load all images and labels
+
+    Args:
+        shuffle: whether to shuffle the data
 
     Returns:
         x_train: list of images to be used for training
@@ -308,8 +326,6 @@ def load_from_filenames(train, test, shuffle):
     x_train = x_train.reshape((len(x_train), INPUT_WIDTH, INPUT_HEIGHT, 3))
     x_test = x_test.reshape((len(x_test), INPUT_WIDTH, INPUT_HEIGHT, 3))
 
-
-
     # shuffle data
     if shuffle:
         p_train = np.random.permutation(len(y_train))
@@ -325,9 +341,11 @@ def run():
 
     # modify model
     for layer in model.layers:
+        # add L2 regularizer to Conv2D and Dense layers
         if isinstance(layer, Conv2D) or isinstance(layer, Dense):
             layer.kernel_regularizer = l2(LAYER_REG)
 
+        # set constants for BatchNormalization layers
         if isinstance(layer, BatchNormalization):
             layer.momentum = BATCHNORM_MOVING_AVERAGE_DECAY
             layer.epsilon = BATCHNORM_EPSILON
@@ -345,12 +363,10 @@ def run():
 
         return LearningRateScheduler(step_decay)
 
-    lr_decay = lr_decay_callback(LR_DECAY, EPOCHS_PER_DECAY)
-    # find a way to use momentum param?
+    # initialize optimizer
     optimizer = Adam(lr=LR_INITIAL,
-                                decay=RMSPROP_DECAY,
-                                epsilon=RMSPROP_EPSILON)
-
+                     decay=OPT_DECAY,
+                     epsilon=OPT_EPSILON)
 
     # categorical crossentropy as loss function
     def build_loss(label_smoothing=0.0):
@@ -377,15 +393,13 @@ def run():
         return loss_fn
 
     """
+    # unfortunately, unfreezing just the last layers leads to the model predicting either only 1 or only 0
+
     # freeze layers
     if not args.skip_train:
-        if args.fine_tune_layers:
-            for layer in model.layers[:-args.fine_tune_layers]:
-                layer.trainable = False
-        else:
-            for layer in model.layers[:-2]:
-                # last two layers are Dense and Softmax
-                layer.trainable = False
+        for layer in model.layers[:-2]:
+            # last two layers are Dense and Softmax
+            layer.trainable = False
     """
 
     # transform model to use multiple GPUs
@@ -410,7 +424,6 @@ def run():
         print("Loading weights")
         parallel_model.load_weights(args.ckpt_load_weights, by_name=True)
 
-
     # compile model
     parallel_model.compile(optimizer=optimizer,
                            loss=build_loss(label_smoothing=LABEL_SMOOTHING),
@@ -424,7 +437,10 @@ def run():
         # build label matrix
         y = to_categorical(y_train, num_classes=NUM_CLASSES)
 
-        # custom callback
+        # define learning rate decay schedule
+        lr_decay = lr_decay_callback(LR_DECAY, EPOCHS_PER_DECAY)
+
+        # custom callback to log metrics
         metrics = CSVMetrics(f"log_classification_{args.fine_tune_layers}.csv")
         metrics.set_data(x_train, y)
 
@@ -475,27 +491,5 @@ def run():
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 1:
-        # use some small values to test model
-        sys.argv += [
-            "--ckpt_load=keras_swisspv_untrained.h5",
-            # "--ckpt_load_weights=weights_classification.hdf5",
-
-            "--skip_train=False",
-            "--skip_test=False",
-
-            "--fine_tune_layers=2",
-
-            "--epochs=10",
-            "--epochs_ckpt=5",
-            "--batch_size=100",
-            "--train_set=train.pickle",
-            "--test_set=test.pickle",
-            "--validation_split=0.1",
-
-            "--verbose=1"
-        ]
-
     args = parse_args()
-
     run()

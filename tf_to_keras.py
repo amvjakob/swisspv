@@ -14,18 +14,31 @@ from keras.models import Model
 from keras import backend as K
 
 # constants for model loading and saving
-PATH_OLD_MODEL_DIR = os.path.join('ckpt', 'inception_classification')
+PATH_OLD_MODEL_DIR = os.path.join('ckpt', 'deepsolar_classification')
 PATH_OLD_MODEL_META = os.path.join(PATH_OLD_MODEL_DIR, 'model.ckpt-0.meta')
 PATH_OLD_MODEL_WEIGHTS = os.path.join(PATH_OLD_MODEL_DIR, 'checkpoint')
 
-PATH_NEW_MODEL_DIR = os.path.join('ckpt', 'inception_tl')
-PATH_NEW_MODEL = os.path.join(PATH_NEW_MODEL_DIR, 'keras_swisspv_untrained.h5')
+PATH_NEW_MODEL_DIR = os.path.join('ckpt', 'inception_tl_load')
 
 NUM_CLASSES = 2
 
 def parse_args():
+    # https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
+    # helper function to pass booleans
+    def str2bool(v):
+        if isinstance(v, bool):
+            return v
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+        else:
+            raise argparse.ArgumentTypeError('Boolean value expected.')
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--verbose', type=int, default=2)
+    parser.add_argument('--with_aux', type=str2bool, nargs='?',
+                        const=True, default=True)
     args = parser.parse_args()
     return args
 
@@ -54,21 +67,25 @@ if __name__ == '__main__':
     predictions = Softmax(name='predictions')(logits)
 
     # aux net
-    output = inception.get_layer(name="mixed7").output
-    aux_logits = AveragePooling2D(pool_size=(5, 5),
-                                  strides=(3, 3),
-                                  padding='valid')(output)
-    aux_logits = Conv2D(128, (1, 1), name='proj')(aux_logits)
-    aux_logits = Conv2D(768, K.int_shape(aux_logits)[1:3],
-                        kernel_initializer=initializers.TruncatedNormal(stddev=0.001),
-                        padding='valid')(aux_logits)
-    aux_logits = Flatten(data_format='channels_last')(aux_logits)
-    aux_logits = Dense(NUM_CLASSES, activation=None, name='aux_logits',
-                       kernel_initializer=initializers.TruncatedNormal(stddev=0.001))(aux_logits)
-    aux_predictions = Softmax(name='aux_predictions')(aux_logits)
+    if args.with_aux:
+        output = inception.get_layer(name="mixed7").output
+        aux_logits = AveragePooling2D(pool_size=(5, 5),
+                                      strides=(3, 3),
+                                      padding='valid')(output)
+        aux_logits = Conv2D(128, (1, 1), name='proj')(aux_logits)
+        aux_logits = Conv2D(768, K.int_shape(aux_logits)[1:3],
+                            kernel_initializer=initializers.TruncatedNormal(stddev=0.001),
+                            padding='valid')(aux_logits)
+        aux_logits = Flatten(data_format='channels_last')(aux_logits)
+        aux_logits = Dense(NUM_CLASSES, activation=None, name='aux_logits',
+                           kernel_initializer=initializers.TruncatedNormal(stddev=0.001))(aux_logits)
+        aux_predictions = Softmax(name='aux_predictions')(aux_logits)
 
-    model = Model(inputs=inception.input, outputs=[predictions, aux_predictions])
-    model.save(os.path.join(PATH_NEW_MODEL_DIR, 'keras_inception_untrained.h5'))
+        model = Model(inputs=inception.input, outputs=[predictions, aux_predictions])
+        model.save(os.path.join(PATH_NEW_MODEL_DIR, 'keras_inception_untrained_aux.h5'))
+    else:
+        model = Model(inputs=inception.input, outputs=predictions)
+        model.save(os.path.join(PATH_NEW_MODEL_DIR, 'keras_inception_untrained.h5'))
 
     # start tensorflow session
     with tf.Session() as sess:
@@ -205,6 +222,10 @@ if __name__ == '__main__':
             print(f"Unmatched layers from TF model: {len(unmatched_layers)}")
 
         # save new model
-        model.save(PATH_NEW_MODEL)
+        if args.with_aux:
+            model.save(os.path.join(PATH_NEW_MODEL_DIR, 'keras_swisspv_untrained_aux.h5'))
+        else:
+            model.save(os.path.join(PATH_NEW_MODEL_DIR, 'keras_swisspv_untrained.h5'))
+
         if args.verbose:
             print("Saved model")

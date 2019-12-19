@@ -1,2 +1,7 @@
-
+# editor files
 .idea
+
+# pycache files
+__pycache__
+inception/__pycache__
+

@@ -57,22 +57,22 @@ An example is provided in `run_seg.sh`
 
 #### Flags
 
-`--ckpt_load` Load the given model from a saved .h5 file. [str]
-`--ckpt_load_weights` Load the weights by giving the path with respect to the base directory. [str]
-`--epochs` Number of training iterations. [int]
-`--verbose` Print out information gradually in terminal output. [bool]
-`--epochs_ckpt` Number of training iterations after which the model is saved. [int]
-`--batch size` Batch size. [int]
-`--train_set` Pickle file where distribution of train images is stored. If these files exist already, the program will load from them. [str]
-`--test_set` Pickle file where distribution of test images is stored. If these files exist already, the program will load from them. [str]
-`--validation_split` Fraction of images used for validation. [float]
-`--skip_train` Skip training. [bool]
-`--skip_train` Skip testing. [bool]
-`--second_layer_from_ckpt` Load second layer from checkpoints. [bool]
-`--two_layers` Use two layers. [bool]
-`--seg_1_weights` Load layer 1 weights. [str]
-`--seg_2_weights` Load layer 2 weights. [str]
-`--data_dir` Path to the dataset. Folder must contain two sub-folders "PV" and "noPV" containing the images with PV and withouth PV, respectively. [str]
+`--ckpt_load` Load the given model from a saved .h5 file. [str]  
+`--ckpt_load_weights` Load the weights by giving the path with respect to the base directory. [str]  
+`--epochs` Number of training iterations. [int]  
+`--verbose` Print out information gradually in terminal output. [bool]  
+`--epochs_ckpt` Number of training iterations after which the model is saved. [int]  
+`--batch size` Batch size. [int]  
+`--train_set` Pickle file where distribution of train images is stored. If these files exist already, the program will load from them. [str]  
+`--test_set` Pickle file where distribution of test images is stored. If these files exist already, the program will load from them. [str]  
+`--validation_split` Fraction of images used for validation. [float]  
+`--skip_train` Skip training. [bool]  
+`--skip_train` Skip testing. [bool]  
+`--second_layer_from_ckpt` Load second layer from checkpoints. [bool]  
+`--two_layers` Use two layers. [bool]  
+`--seg_1_weights` Load layer 1 weights. [str]  
+`--seg_2_weights` Load layer 2 weights. [str]  
+`--data_dir` Path to the dataset. Folder must contain two sub-folders "PV" and "noPV" containing the images with PV and withouth PV, respectively. [str]  
 
 ## Authors & Acknowledgments
 

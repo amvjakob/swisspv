@@ -24,7 +24,7 @@ mkdir inception_tl_load
 mkdir inception_tl_save
 ```
 
-The final model can be downloaded [here](https://drive.google.com/drive/folders/1HpJn3-KUF0-MBD14KVLR7Xgo45swHH4E?usp=sharing),
+The final models can be downloaded [here](https://drive.google.com/drive/folders/1HpJn3-KUF0-MBD14KVLR7Xgo45swHH4E?usp=sharing),
 and placed into `inception_tl_load`.
 
 ### Preprocessing

@@ -10,6 +10,12 @@ pip install -r requirements.txt
 
 Note: if your machine is unable to find Tensorflow 1.9.0, the code should run on any version of Tensorflow between 1.15.0 and 1.9.0.
 
+## Data
+
+The data is obtained from SwissTopo. Unfortunately, we cannot share them publicly.  
+
+(for the CS-433 TA team) However, you can contact Dr. Roberto Castello of the LESO-PB lab if the data is absolutely necessary for grading the project.
+
 ## Running the program
 ### Final model
 

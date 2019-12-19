@@ -13,7 +13,7 @@ from keras.models import Model
 
 from keras import backend as K
 
-# constants for model loading
+# constants for model loading and saving
 PATH_OLD_MODEL_DIR = os.path.join('ckpt', 'inception_classification')
 PATH_OLD_MODEL_META = os.path.join(PATH_OLD_MODEL_DIR, 'model.ckpt-0.meta')
 PATH_OLD_MODEL_WEIGHTS = os.path.join(PATH_OLD_MODEL_DIR, 'checkpoint')
@@ -39,6 +39,7 @@ if __name__ == '__main__':
                             pooling=None)
     output = inception.layers[-1].output
 
+    # add last layers
     net = AveragePooling2D(pool_size=(8, 8), # K.int_shape(output),
                                   strides=(2, 2),
                                   padding='valid',
@@ -67,6 +68,7 @@ if __name__ == '__main__':
     aux_predictions = Softmax(name='aux_predictions')(aux_logits)
 
     model = Model(inputs=inception.input, outputs=[predictions, aux_predictions])
+    model.save(os.path.join(PATH_NEW_MODEL_DIR, 'keras_inception_untrained.h5'))
 
     # start tensorflow session
     with tf.Session() as sess:
@@ -102,8 +104,8 @@ if __name__ == '__main__':
             except Exception as e:
                 print("For var={}, an exception occurred".format(var.name))
                 if args.verbose:
-                    print(type(e))    # the exception instance
-                    print(e.args)     # arguments stored in .args
+                    print(type(e))
+                    print(e.args)
                     print(e)
 
         if args.verbose:
@@ -163,8 +165,7 @@ if __name__ == '__main__':
             "mixed_17x17x768e" : "mixed7",
             "mixed_17x17x1280a": "mixed8",
             "mixed_8x8x2048a"  : "mixed9",
-            "mixed_8x8x2048b"  : "mixed10",
-
+            "mixed_8x8x2048b"  : "mixed10"
         }
 
         # apply loaded weights to new model

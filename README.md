@@ -5,8 +5,10 @@ The model was developed using [Keras](https://keras.io/), on Python 3.6.5.
 ## Setting up the environment
 The necessary librairies are explicited in `requirements.txt`. To install them all at once, run
 ```
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
+
+Note: if your machine is unable to find Tensorflow 1.9.0, the code should run on any version of Tensorflow between 1.15.0 and 1.9.0.
 
 ## Running the program
 ### Preprocessing
@@ -22,15 +24,16 @@ mkdir inception_tl_load
 mkdir inception_tl_save
 ```
 
-We then have to transform DeepSolar's model from TensorFlow to Keras. To perform this task, run
+We then have to transform DeepSolar's model from TensorFlow to Keras. To perform this task, return to the base directory and run
+
 ```
 python deepsolar_to_tf.py
 python tf_to_keras.py --with_aux=False
 ```
-where `with_aux=False` creates a model with a single output, while `with_aux=True` uses an intermediary part of the model for predictions too and therefore produces two outputs.
+where `with_aux=False` creates a model with a single output, while `with_aux=True` uses an intermediary part of the model for predictions too and therefore produces two outputs. These two scripts take a total of approximately 20 minutes to run on a regular computer.
 
 ### Classification
-The script ```train_classification_tl.py``` handles all aspects of the classification task (loads data, trains and evaluates model, saves checkpoints). Have a look at the possible flags for specific use. The saved Keras model is called ```keras_swisspv_XXX.h5```.
+The script ```train_classification_tl.py``` handles all aspects of the classification task (loads data, trains and evaluates model, saves checkpoints). Have a look at the possible flags for specific use. The saved Keras model is called ```keras_swisspv_untrained.h5``` and is found in ```/BASE_DIR/ckpt/inception_tl_load/```.
 An example is provided in `run.sh`
 
 Alternatively, one can use the file ```train_classification_tl_aux.py``` to run the classification using the augmented model.
